@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drakholm — Ventas por marca</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{ --bg:#14161a; --card:#1d2026; --ink:#e8e6e3; --muted:#9aa0a6; --line:#2b2f37; --pos:#4cd07d; --neg:#ff6b6b; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,Segoe UI,Roboto,sans-serif; }
+  header{ padding:20px 26px; border-bottom:1px solid var(--line); }
+  h1{ margin:0 0 4px; font-size:21px; } h1 small{ color:var(--muted); font-weight:400; font-size:13px; }
+  .wrap{ padding:22px 26px; max-width:1200px; margin:0 auto; }
+  .controls{ display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
+  .controls label{ color:var(--muted); font-size:13px; margin-right:6px; }
+  select{ background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:7px; padding:7px 10px; font-size:14px; }
+  .cards{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:22px; }
+  .kpi{ background:var(--card); border:1px solid var(--line); border-radius:11px; padding:14px 18px; min-width:150px; }
+  .kpi .v{ font-size:24px; font-weight:700; } .kpi .l{ color:var(--muted); font-size:12px; margin-top:2px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:11px; padding:16px 18px; margin-bottom:22px; }
+  .card h2{ margin:0 0 12px; font-size:15px; font-weight:600; color:#cfd3d8; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th,td{ padding:7px 9px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  th:first-child,td:first-child{ text-align:left; }
+  thead th{ color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--card); }
+  tbody tr:hover{ background:#23272f; }
+  .tot{ font-weight:700; } .tot td{ border-top:2px solid var(--line); }
+  .swatch{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:7px; vertical-align:middle; }
+  .foot{ color:var(--muted); font-size:12px; margin-top:8px; }
+  .pill{ background:#23272f; border:1px solid var(--line); border-radius:20px; padding:3px 11px; font-size:12px; color:var(--muted); }
+  input.num{ width:80px; background:#23272f; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font-size:13px; text-align:right; }
+  select.lic{ background:#23272f; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font-size:12px; }
+  .btn{ background:#2a2e36; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px; }
+  .btn:hover{ background:#333842; }
+  .pos{ color:var(--pos); } .neg{ color:var(--neg); }
+  .toolbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  #gate{ max-width:380px; margin:13vh auto; text-align:center; padding:0 20px; }
+  #gate input{ width:250px; background:#23272f; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-size:15px; }
+  #gate .lock{ font-size:34px; }
+</style>
+</head><body><div id="gate">
+  <div class="lock">🔒</div>
+  <h1>Drakholm · Panel de ventas</h1>
+  <p class="foot" style="margin-bottom:16px">Contenido privado del equipo. Introduce la contraseña.</p>
+  <div><input id="pw" type="password" placeholder="Contraseña" autocomplete="off"></div>
+  <div style="margin-top:12px"><button class="btn" onclick="entrar()">Entrar</button></div>
+  <div id="gmsg" class="foot"></div>
+</div><div id="app" style="display:none"><header>
+  <h1>Drakholm · Ventas y rentabilidad por marca <small id="rango"></small></h1>
+  <span class="pill" id="aviso"></span>
+</header>
+<div class="wrap">
+  <div class="controls">
+    <div><label>Tienda</label><select id="fTienda"></select></div>
+    <div><label>Métrica</label>
+      <select id="fMetrica">
+        <option value="ingreso">Ingreso (€)</option>
+        <option value="unidades">Unidades</option>
+      </select></div>
+    <div><label>Desde</label><select id="fDesde"></select></div>
+    <div><label>Hasta</label><select id="fHasta"></select></div>
+  </div>
+
+  <div class="cards" id="kpis"></div>
+
+  <div class="card">
+    <h2 id="t1">Evolución mensual por marca</h2>
+    <canvas id="chartMes" height="110"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Rentabilidad por marca — pon aquí el gasto y la licencia</h2>
+    <div class="toolbar">
+      <button class="btn" onclick="exportCostes()">⬇ Descargar costes_marca.csv</button>
+      <button class="btn" onclick="restaurarCostes()">↺ Restaurar desde CSV</button>
+      <span class="foot" style="margin:0">Edita <b>Coste/ud</b> y la <b>Licencia</b> de cada marca: el margen se recalcula solo. Se guarda en este navegador; descarga el CSV para conservarlo entre actualizaciones.</span>
+    </div>
+    <canvas id="chartMargen" height="90"></canvas>
+    <div style="overflow:auto; margin-top:14px;">
+      <table id="tablaRent"></table>
+    </div>
+    <div class="foot">Coste prod. = Coste/ud × unidades vendidas en el rango. Licencia <i>mensual</i> se multiplica por los meses con actividad del rango (<span id="nMeses"></span>); <i>único</i> se imputa una vez. Margen = Ingreso − Coste prod. − Licencia. Mide si la marca es <b>rentable</b> (no es el neto al céntimo: no descuenta comisiones de plataforma, a propósito).</div>
+  </div>
+
+  <div class="card">
+    <h2>Ranking de marcas (ingreso total del rango)</h2>
+    <canvas id="chartRank" height="80"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Ventas SIN SKU — no atribuidas a marca <span class="pill" id="pillSinSku"></span></h2>
+    <canvas id="chartSinSku" height="90"></canvas>
+    <div style="overflow:auto; max-height:340px; margin-top:12px;">
+      <table id="tablaSinSku"></table>
+    </div>
+    <div class="foot">Listings de Etsy sin SKU asignado. Para que cuenten por marca: ponles <code>SKU = product_id</code> (p. ej. <code>HIGH-OG-001</code>) en Etsy. Detalle en <code>out/ventas/sin_sku.csv</code>.</div>
+  </div>
+
+  <div class="card">
+    <h2>Tabla: marca × mes</h2>
+    <div style="overflow:auto; max-height:480px;">
+      <table id="tabla"></table>
+    </div>
+  </div>
+
+  <p class="foot">Ingreso = bruto de producto (precio × unidades). Para actualizar datos: <code>py -m drakholm.ventas</code>.</p>
+</div></div><script>
+const EUR = new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+const EUR2 = new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:2});
+const NUM = new Intl.NumberFormat('es-ES');
+const LS_KEY = 'drakholm_ventas_costes';
+const LIC_OPTS = ['ninguna','mensual','unico'];
+let DATOS=[], COLORES={}, COSTES_BASE=[], SINSKU=[];
+let meses=[], tiendas=[], baseMap={}, overrides={};
+let fTienda, fMetrica, fDesde, fHasta;
+let chMes, chRank, chMargen, chSinSku;
+
+function colorMarca(m){ return COLORES[m] || '#888'; }
+function nombre(m){ const r=DATOS.find(x=>x.marca===m); return r?r.marca_nombre:(baseMap[m]?baseMap[m].marca_nombre:m); }
+function costeDe(m){
+  const b = baseMap[m]||{}; const o = overrides[m]||{};
+  return {
+    coste_unitario_eur: +(o.coste_unitario_eur ?? b.coste_unitario_eur ?? 0),
+    licencia_tipo: o.licencia_tipo ?? b.licencia_tipo ?? 'ninguna',
+    licencia_eur: +(o.licencia_eur ?? b.licencia_eur ?? 0),
+  };
+}
+function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(overrides)); }catch(e){} }
+function setCoste(el){
+  const m=el.dataset.marca, campo=el.dataset.campo;
+  overrides[m] = overrides[m] || {};
+  overrides[m][campo] = (campo==='licencia_tipo') ? el.value : (parseFloat(String(el.value).replace(',','.'))||0);
+  persist(); render();
+}
+function restaurarCostes(){ if(confirm('¿Olvidar lo editado en el navegador y volver al CSV?')){ overrides={}; try{localStorage.removeItem(LS_KEY);}catch(e){} render(); } }
+function exportCostes(){
+  const cols=['marca','marca_nombre','coste_unitario_eur','licencia_tipo','licencia_eur','notas'];
+  const marcasTodas=[...new Set([...Object.keys(baseMap), ...Object.keys(overrides)])].sort();
+  const esc=v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  let csv=cols.join(',')+'\n';
+  marcasTodas.forEach(m=>{ const c=costeDe(m), b=baseMap[m]||{};
+    csv += [m, b.marca_nombre||nombre(m), c.coste_unitario_eur, c.licencia_tipo, c.licencia_eur, b.notas||''].map(esc).join(',')+'\n'; });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='costes_marca.csv'; a.click();
+}
+function filtrar(){
+  const t=fTienda.value, d=fDesde.value, h=fHasta.value;
+  return DATOS.filter(r => (!t||r.tienda===t) && r.mes>=d && r.mes<=h);
+}
+
+function render(){
+  const metric=fMetrica.value, rows=filtrar();
+  const mesesR = meses.filter(m=>m>=fDesde.value && m<=fHasta.value);
+  document.getElementById('nMeses').textContent = mesesR.length + (mesesR.length===1?' mes':' meses');
+  const totMarca={}, ingMarca={}, udMarca={};
+  rows.forEach(r=>{ totMarca[r.marca]=(totMarca[r.marca]||0)+r[metric];
+                    ingMarca[r.marca]=(ingMarca[r.marca]||0)+r.ingreso;
+                    udMarca[r.marca]=(udMarca[r.marca]||0)+r.unidades; });
+  const marcasR = Object.keys(totMarca).sort((a,b)=>totMarca[b]-totMarca[a]);
+  const realesR = marcasR.filter(m=>m!=='SIN-SKU');
+
+  const rent = {};
+  realesR.forEach(m=>{
+    const c=costeDe(m), ing=ingMarca[m]||0, ud=udMarca[m]||0;
+    const cprod=c.coste_unitario_eur*ud;
+    const clic = c.licencia_tipo==='mensual' ? c.licencia_eur*mesesR.length
+               : c.licencia_tipo==='unico' ? c.licencia_eur : 0;
+    rent[m] = { ing, ud, cprod, clic, margen: ing-cprod-clic, c };
+  });
+  const margenTot = Object.values(rent).reduce((s,r)=>s+r.margen,0);
+  const licTot = Object.values(rent).reduce((s,r)=>s+r.clic,0);
+  const ingSinSku = ingMarca['SIN-SKU']||0;
+
+  const totIng=rows.reduce((s,r)=>s+r.ingreso,0), totUni=rows.reduce((s,r)=>s+r.unidades,0);
+  const cl = v => v>=0?'pos':'neg';
+  document.getElementById('kpis').innerHTML = [
+    [`${EUR.format(totIng)}`,'Ingreso bruto',''],
+    [`${NUM.format(totUni)}`,'Unidades',''],
+    [`${EUR.format(margenTot)}`,'Margen estimado',cl(margenTot)],
+    [`${EUR.format(licTot)}`,'Coste licencias',''],
+    [`${realesR.length? nombre(realesR[0]):'—'}`,'Marca nº1 (€)',''],
+    [`${EUR.format(ingSinSku)}`,'Sin atribuir (sin SKU)',ingSinSku?'neg':''],
+  ].map(([v,l,c])=>`<div class="kpi"><div class="v ${c}">${v}</div><div class="l">${l}</div></div>`).join('');
+
+  const val=(m,mes)=>rows.filter(r=>r.marca===m&&r.mes===mes).reduce((s,r)=>s+r[metric],0);
+  const unidad = metric==='ingreso' ? '€' : 'ud';
+  if(chMes) chMes.destroy();
+  chMes = new Chart(document.getElementById('chartMes'),{ type:'bar',
+    data:{ labels:mesesR, datasets: marcasR.map(m=>({ label:nombre(m), backgroundColor:colorMarca(m),
+                               data:mesesR.map(mes=>+val(m,mes).toFixed(2)) })) },
+    options:{ responsive:true, plugins:{ legend:{ labels:{ color:'#cfd3d8' } },
+              tooltip:{ callbacks:{ label:c=>`${c.dataset.label}: ${NUM.format(c.parsed.y)} ${unidad}` } } },
+      scales:{ x:{ stacked:true, ticks:{ color:'#9aa0a6' }, grid:{ color:'#2b2f37' } },
+               y:{ stacked:true, ticks:{ color:'#9aa0a6' }, grid:{ color:'#2b2f37' } } } } });
+  document.getElementById('t1').textContent = `Evolución mensual por marca (${metric==='ingreso'?'€':'unidades'})`;
+
+  if(chMargen) chMargen.destroy();
+  chMargen = new Chart(document.getElementById('chartMargen'),{ type:'bar',
+    data:{ labels:realesR.map(nombre),
+           datasets:[{ data:realesR.map(m=>+rent[m].margen.toFixed(2)),
+                       backgroundColor:realesR.map(m=>rent[m].margen>=0?'#4cd07d':'#ff6b6b') }] },
+    options:{ responsive:true, plugins:{ legend:{ display:false },
+              tooltip:{ callbacks:{ label:c=>`Margen: ${EUR2.format(c.parsed.y)}` } } },
+      scales:{ x:{ ticks:{ color:'#cfd3d8' }, grid:{ display:false } },
+               y:{ ticks:{ color:'#9aa0a6' }, grid:{ color:'#2b2f37' } } } } });
+
+  let hr = '<thead><tr><th>Marca</th><th>Ingreso</th><th>Uds</th><th>Coste/ud €</th><th>Coste prod.</th><th>Licencia</th><th>Importe €</th><th>Coste lic.</th><th>Margen</th><th>%</th></tr></thead><tbody>';
+  realesR.forEach(m=>{ const r=rent[m], pct=r.ing? (r.margen/r.ing*100):0;
+    hr += `<tr><td><span class="swatch" style="background:${colorMarca(m)}"></span>${nombre(m)}</td>`
+       + `<td>${EUR.format(r.ing)}</td><td>${NUM.format(r.ud)}</td>`
+       + `<td><input class="num" type="number" step="0.1" min="0" value="${r.c.coste_unitario_eur}" data-marca="${m}" data-campo="coste_unitario_eur" onchange="setCoste(this)"></td>`
+       + `<td>${EUR2.format(r.cprod)}</td>`
+       + `<td><select class="lic" data-marca="${m}" data-campo="licencia_tipo" onchange="setCoste(this)">`
+       +   LIC_OPTS.map(o=>`<option ${o===r.c.licencia_tipo?'selected':''}>${o}</option>`).join('')+`</select></td>`
+       + `<td><input class="num" type="number" step="1" min="0" value="${r.c.licencia_eur}" data-marca="${m}" data-campo="licencia_eur" onchange="setCoste(this)"></td>`
+       + `<td>${EUR2.format(r.clic)}</td>`
+       + `<td class="${r.margen>=0?'pos':'neg'}"><b>${EUR2.format(r.margen)}</b></td>`
+       + `<td class="${r.margen>=0?'pos':'neg'}">${pct.toFixed(0)}%</td></tr>`;
+  });
+  const sI=Object.values(rent).reduce((s,r)=>s+r.ing,0), sCp=Object.values(rent).reduce((s,r)=>s+r.cprod,0),
+        sUd=Object.values(rent).reduce((s,r)=>s+r.ud,0);
+  hr += `<tr class="tot"><td>Total</td><td>${EUR.format(sI)}</td><td>${NUM.format(sUd)}</td><td>·</td><td>${EUR2.format(sCp)}</td><td>·</td><td>·</td><td>${EUR2.format(licTot)}</td><td class="${margenTot>=0?'pos':'neg'}">${EUR2.format(margenTot)}</td><td>${sI?(margenTot/sI*100).toFixed(0):0}%</td></tr></tbody>`;
+  document.getElementById('tablaRent').innerHTML = hr;
+
+  if(chRank) chRank.destroy();
+  chRank = new Chart(document.getElementById('chartRank'),{ type:'bar',
+    data:{ labels:marcasR.map(nombre),
+           datasets:[{ data:marcasR.map(m=>+(ingMarca[m]||0).toFixed(2)), backgroundColor:marcasR.map(colorMarca) }] },
+    options:{ indexAxis:'y', responsive:true, plugins:{ legend:{ display:false },
+              tooltip:{ callbacks:{ label:c=>EUR2.format(c.parsed.x) } } },
+      scales:{ x:{ ticks:{ color:'#9aa0a6' }, grid:{ color:'#2b2f37' } },
+               y:{ ticks:{ color:'#cfd3d8' }, grid:{ display:false } } } } });
+
+  let h = '<thead><tr><th>Marca</th>' + mesesR.map(m=>`<th>${m}</th>`).join('') + '<th>Total</th></tr></thead><tbody>';
+  marcasR.forEach(m=>{
+    const cells = mesesR.map(mes=>{ const v=val(m,mes); return `<td>${v?(metric==='ingreso'?EUR.format(v):NUM.format(v)):'·'}</td>`; });
+    h += `<tr><td><span class="swatch" style="background:${colorMarca(m)}"></span>${nombre(m)}</td>${cells.join('')}<td class="tot">${metric==='ingreso'?EUR.format(totMarca[m]):NUM.format(totMarca[m])}</td></tr>`;
+  });
+  const colTot = mesesR.map(mes=>marcasR.reduce((s,m)=>s+val(m,mes),0));
+  h += `<tr class="tot"><td>Total</td>${colTot.map(v=>`<td>${metric==='ingreso'?EUR.format(v):NUM.format(v)}</td>`).join('')}<td>${metric==='ingreso'?EUR.format(colTot.reduce((a,b)=>a+b,0)):NUM.format(colTot.reduce((a,b)=>a+b,0))}</td></tr></tbody>`;
+  document.getElementById('tabla').innerHTML = h;
+}
+
+function renderSinSku(){
+  let rows = SINSKU.slice();
+  if(fTienda.value) rows = rows.filter(r=>r.tienda===fTienda.value);
+  const pill=document.getElementById('pillSinSku');
+  const tot=rows.reduce((s,r)=>s+r.ingreso,0), ud=rows.reduce((s,r)=>s+r.unidades,0);
+  pill.textContent = rows.length? `${rows.length} listings · ${ud} uds · ${EUR.format(tot)}` : 'ninguno';
+  rows.sort((a,b)=>b.ingreso-a.ingreso);
+  const top=rows.slice(0,12);
+  const corto=t=>{ t=(t||'').split(',')[0]; return t.length>34?t.slice(0,33)+'…':t; };
+  if(chSinSku) chSinSku.destroy();
+  chSinSku = new Chart(document.getElementById('chartSinSku'),{ type:'bar',
+    data:{ labels:top.map(r=>corto(r.titulo)),
+           datasets:[{ data:top.map(r=>+r.ingreso.toFixed(2)), backgroundColor:'#bdc3c7' }] },
+    options:{ indexAxis:'y', responsive:true, plugins:{ legend:{ display:false },
+              tooltip:{ callbacks:{ label:c=>`${EUR2.format(c.parsed.x)}` } } },
+      scales:{ x:{ ticks:{ color:'#9aa0a6' }, grid:{ color:'#2b2f37' } },
+               y:{ ticks:{ color:'#cfd3d8' }, grid:{ display:false } } } } });
+  let h='<thead><tr><th>Producto (Etsy)</th><th>listing_id</th><th>Uds</th><th>Ingreso</th></tr></thead><tbody>';
+  rows.forEach(r=>{ h+=`<tr><td>${corto(r.titulo)}</td><td>${r.listing_id}</td><td>${r.unidades}</td><td>${EUR2.format(r.ingreso)}</td></tr>`; });
+  h+=`<tr class="tot"><td>Total sin SKU</td><td></td><td>${ud}</td><td>${EUR2.format(tot)}</td></tr></tbody>`;
+  document.getElementById('tablaSinSku').innerHTML=h;
+}
+
+function iniciarPanel(){
+  meses = [...new Set(DATOS.map(d=>d.mes))].sort();
+  tiendas = [...new Set(DATOS.map(d=>d.tienda))].sort();
+  baseMap = {}; COSTES_BASE.forEach(c=>baseMap[c.marca]=c);
+  try{ overrides = JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch(e){ overrides={}; }
+  fTienda=document.getElementById('fTienda'); fMetrica=document.getElementById('fMetrica');
+  fDesde=document.getElementById('fDesde'); fHasta=document.getElementById('fHasta');
+  fTienda.innerHTML = '<option value="">Todas</option>' + tiendas.map(t=>`<option>${t}</option>`).join('');
+  fDesde.innerHTML = meses.map(m=>`<option>${m}</option>`).join('');
+  fHasta.innerHTML = meses.map(m=>`<option>${m}</option>`).join('');
+  fDesde.value = meses[0]; fHasta.value = meses[meses.length-1];
+  document.getElementById('rango').textContent = `· ${meses[0]} → ${meses[meses.length-1]}`;
+  [fTienda,fMetrica,fDesde,fHasta].forEach(el=>el.addEventListener('change', render));
+  fTienda.addEventListener('change', renderSinSku);
+  document.getElementById('aviso').textContent = tiendas.length===1
+    ? `Solo datos de ${tiendas[0]} — Shopify aparecerá cuando se active el scope read_orders.`
+    : `Tiendas: ${tiendas.join(' + ')}`;
+  render(); renderSinSku();
+}
+const PAYLOAD={"salt": "/850g4DhpjL7V2b17kG/9Q==", "iv": "zzm5CK2mx+YbIIU3", "ct": "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", "iter": 250000};
+
+function _b64d(s){ return Uint8Array.from(atob(s), c=>c.charCodeAt(0)); }
+async function _descifrar(pw){
+  const enc = new TextEncoder();
+  const km = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt:_b64d(PAYLOAD.salt), iterations:PAYLOAD.iter, hash:'SHA-256' },
+    km, { name:'AES-GCM', length:256 }, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv:_b64d(PAYLOAD.iv) }, key, _b64d(PAYLOAD.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function entrar(){
+  const pw=document.getElementById('pw').value, msg=document.getElementById('gmsg');
+  if(!pw){ msg.textContent='Escribe la contraseña.'; return; }
+  msg.className='foot'; msg.textContent='Descifrando…';
+  try{
+    const data = await _descifrar(pw);
+    DATOS=data.DATOS; COLORES=data.COLORES; COSTES_BASE=data.COSTES_BASE; SINSKU=data.SINSKU;
+    document.getElementById('gate').style.display='none';
+    document.getElementById('app').style.display='block';
+    iniciarPanel();
+  }catch(e){ msg.className='foot neg'; msg.textContent='Contraseña incorrecta.'; }
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  const p=document.getElementById('pw'); p.focus();
+  p.addEventListener('keydown', e=>{ if(e.key==='Enter') entrar(); });
+});
+</script></body></html>
